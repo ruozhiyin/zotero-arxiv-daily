@@ -66,9 +66,13 @@ class ArxivPaper:
     
     @cached_property
     def tex(self) -> dict[str,str]:
+        # 检查 pdf_url 是否存在
+        if self._paper.pdf_url is None:
+            logger.warning(f"Paper {self.arxiv_id} has no PDF URL, skipping source download.")
+            return None
+        
         with ExitStack() as stack:
             tmpdirname = stack.enter_context(TemporaryDirectory())
-            # file = self._paper.download_source(dirpath=tmpdirname)
             try:
                 # 尝试下载源文件
                 file = self._paper.download_source(dirpath=tmpdirname)
@@ -82,6 +86,11 @@ class ArxivPaper:
                     # 如果是其他 HTTP 错误 (如 503)，这可能是临时性问题，值得记录下来
                     logger.error(f"HTTP Error {e.code} when downloading source for {self.arxiv_id}: {e.reason}")
                     raise # 重新抛出异常，因为这可能是个需要关注的严重问题
+            except AttributeError as e:
+                # 额外的安全措施：捕获 AttributeError
+                logger.error(f"AttributeError when downloading source for {self.arxiv_id}: {e}")
+                return None
+                
             try:
                 tar = stack.enter_context(tarfile.open(file))
             except tarfile.ReadError:
